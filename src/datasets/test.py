@@ -1,4 +1,4 @@
-from src.dataset.PH2 import PH2
+from src.datasets.PH2 import PH2
 import torchvision.transforms as transforms
 
 transform = transforms.Compose([
