@@ -18,6 +18,7 @@ from time import time
 from src.dataset.PH2 import PH2
 from src.dataset.DRIVE import DRIVE
 from src.models.EncDecModel import EncDec
+from src.models.losses import BCELoss
 #from lib.model.DilatedNetModel import DilatedNet
 #from lib.model.UNetModel import UNet, UNet2
 #from lib.losses import BCELoss, DiceLoss, FocalLoss, BCELoss_TotalVariation
