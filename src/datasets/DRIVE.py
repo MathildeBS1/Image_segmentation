@@ -18,6 +18,7 @@ class DRIVE(torch.utils.data.Dataset):
         self.images = []
         self.vessel_masks = []
         self.fov_masks = []
+        self.case_ids = []
         
         self.mean = None
         self.std = None
@@ -26,6 +27,11 @@ class DRIVE(torch.utils.data.Dataset):
         self.vessel_masks = sorted(glob.glob(os.path.join(data_path, 'training/1st_manual/*.gif')))
         self.fov_masks = sorted(glob.glob(os.path.join(data_path, 'training/mask/*.gif')))
         
+        for img_path in self.images:
+            filename = os.path.basename(img_path)
+            case_id = filename.replace('_training.tif', '')
+            self.case_ids.append(case_id)
+        
         assert len(self.images) == len(self.vessel_masks) == len(self.fov_masks), \
             "Mismatch in number of images and masks"
     
@@ -33,9 +39,18 @@ class DRIVE(torch.utils.data.Dataset):
         return len(self.images)
     
     def __getitem__(self, idx):
-        image = np.array(Image.open(self.images[idx]))
-        vessel_mask = np.array(Image.open(self.vessel_masks[idx]))
-        fov_mask = np.array(Image.open(self.fov_masks[idx]))
+        image = Image.open(self.images[idx])
+        vessel_mask = Image.open(self.vessel_masks[idx])
+        fov_mask = Image.open(self.fov_masks[idx])
+        case_id = self.case_ids[idx]
+        
+        image = image.resize((512, 512), Image.BILINEAR)
+        vessel_mask = vessel_mask.resize((512, 512), Image.NEAREST)
+        fov_mask = fov_mask.resize((512, 512), Image.NEAREST)
+        
+        image = np.array(image)
+        vessel_mask = np.array(vessel_mask)
+        fov_mask = np.array(fov_mask)
         
         vessel_mask = (vessel_mask > 0).astype(np.float32)
         fov_mask = (fov_mask > 0).astype(np.float32)
@@ -51,7 +66,7 @@ class DRIVE(torch.utils.data.Dataset):
         if self.transform:
             image, vessel_mask, fov_mask = self.transform(image, vessel_mask, fov_mask)
         
-        return image, vessel_mask, fov_mask
+        return image, vessel_mask, fov_mask, case_id
     
     def set_normalization(self, mean, std):
         """Set normalization parameters (mean and std per channel)."""
@@ -63,8 +78,8 @@ class DRIVE(torch.utils.data.Dataset):
         all_pixels = []
         
         for idx in train_indices:
-            image = np.array(Image.open(self.images[idx]))
-            image = image.astype(np.float32) / 255.0
+            image = Image.open(self.images[idx]).resize((512, 512), Image.BILINEAR)
+            image = np.array(image).astype(np.float32) / 255.0
             all_pixels.append(image.reshape(-1, 3))
         
         all_pixels = np.concatenate(all_pixels, axis=0)
@@ -117,8 +132,9 @@ if __name__ == "__main__":
     print(f"Mean: {dataset.mean}")
     print(f"Std: {dataset.std}")
     
-    image, vessel_mask, fov_mask = next(iter(train_loader))
+    image, vessel_mask, fov_mask, case_ids = next(iter(train_loader))
     print(f"\nBatch shapes:")
     print(f"Image: {image.shape}")
     print(f"Vessel mask: {vessel_mask.shape}")
     print(f"FOV mask: {fov_mask.shape}")
+    print(f"Case IDs: {case_ids}")
