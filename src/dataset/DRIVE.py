@@ -1,9 +1,9 @@
 import torch
 import os
 
-DATA_PATH = '/dtu/datasets1/02516/???'
+DATA_PATH = '/dtu/datasets1/02516/DRIVE'
 
-class PhC(torch.utils.data.Dataset):
+class DRIVE(torch.utils.data.Dataset):
     def __init__(self, train, transform):
         'Initialization'
         self.transform = transform
