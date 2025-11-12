@@ -71,12 +71,13 @@ def create_loss(loss_name, train_loader, device):
     return criterion
 
 
-def setup_checkpoint_dir(base_dir, dataset, model, timestamp=None):
+def setup_checkpoint_dir(base_dir, dataset, model, loss, timestamp=None):
     """Create checkpoint directory with naming convention."""
     if timestamp is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    checkpoint_dir = Path(base_dir) / f"{dataset}_{model}_{timestamp}"
+    # Format: {dataset}_{model}_{loss}_{timestamp}
+    checkpoint_dir = Path(base_dir) / f"{dataset}_{model}_{loss}_{timestamp}"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Checkpoint directory: {checkpoint_dir}")
 

@@ -90,7 +90,7 @@ def main():
 
     # Setup
     checkpoint_dir = setup_checkpoint_dir(
-        args.checkpoint_base, args.dataset, args.model
+        args.checkpoint_base, args.dataset, args.model, args.loss
     )
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
