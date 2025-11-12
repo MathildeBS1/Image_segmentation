@@ -145,7 +145,9 @@ class WeightedBCELoss(nn.Module):
         for batch in train_loader:
             if dataset_class == "PH2":  # PH2: (image, mask, case_id)
                 _, mask, _ = batch
-            elif dataset_class == "DRIVE":  # DRIVE: (image, vessel_mask, fov_mask, case_id)
+            elif (
+                dataset_class == "DRIVE"
+            ):  # DRIVE: (image, vessel_mask, fov_mask, case_id)
                 _, mask, _, _ = batch
             else:
                 raise ValueError(f"Unsupported dataset class: {dataset_class}")

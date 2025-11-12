@@ -63,6 +63,7 @@ class EarlyStopping:
         else:  # mode == "max"
             return current_metric > self.best_metric + self.delta
 
+
 if __name__ == "__main__":
     print("Testing EarlyStopping with mode='min' (like loss)")
     print("=" * 60)

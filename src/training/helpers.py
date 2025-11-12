@@ -22,7 +22,9 @@ def save_checkpoint(model, optimizer, epoch, metrics, checkpoint_path, verbose=T
 
     if verbose:
         metric_str = ", ".join([f"{k}={v:.4f}" for k, v in metrics.items()])
-        logger.info(f"Checkpoint saved: {checkpoint_path} (epoch {epoch}, {metric_str})")
+        logger.info(
+            f"Checkpoint saved: {checkpoint_path} (epoch {epoch}, {metric_str})"
+        )
 
 
 def load_checkpoint(
@@ -44,7 +46,9 @@ def load_checkpoint(
         epoch = checkpoint.get("epoch", "unknown")
         metrics = checkpoint.get("metrics", {})
         metric_str = ", ".join([f"{k}={v:.4f}" for k, v in metrics.items()])
-        logger.info(f"✓ Checkpoint loaded: {checkpoint_path} (epoch {epoch}, {metric_str})")
+        logger.info(
+            f"✓ Checkpoint loaded: {checkpoint_path} (epoch {epoch}, {metric_str})"
+        )
 
     return checkpoint
 
