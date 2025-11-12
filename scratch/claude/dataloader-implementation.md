@@ -70,25 +70,3 @@ Each sample returns:
 
 ### FOV Masks (DRIVE)
 Field-of-view masks identify valid retinal region vs black background. Decision: use for evaluation only (not training) since black border is valid background class.
-
-## Technical Challenges & Solutions
-
-1. **Variable image sizes (PH2)**: Solved by resizing to fixed 512×512
-2. **Non-consecutive sample IDs**: Handled by explicit validation during loading
-3. **Information leakage risk**: Prevented by computing normalization stats from training split only
-4. **Missing test labels (DRIVE)**: Created custom splits from training data only
-5. **Binary mask preservation**: Used nearest neighbor interpolation for masks
-
-## Code Quality
-- Clean, consistent structure across both datasets
-- Minimal comments (self-documenting code)
-- One-line docstrings
-- No user-configurable parameters for core design decisions (512×512, splits, seed)
-- Includes `__main__` block for quick validation
-
-## Validation
-Both dataloaders tested and confirmed:
-- Correct batch shapes: `[batch_size, channels, 512, 512]`
-- Proper normalization statistics computed
-- Case IDs correctly extracted and returned
-- No dimension mismatch errors
