@@ -3,9 +3,8 @@ import numpy as np
 import torch
 
 
-def set_seed():
-    """Set random seeds for reproducibility across different libraries."""
-    seed = 67
+def set_seed(seed=67):
+    """Set seed for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

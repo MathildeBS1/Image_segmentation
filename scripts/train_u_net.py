@@ -13,7 +13,7 @@ from src.training.early_stopping import EarlyStopping
 from src.training.helpers import save_history_to_csv
 from src.utils.logger import get_logger
 from src.utils.seed import set_seed
-from common import (
+from scripts.common import (
     create_dataloaders,
     create_model,
     create_loss,
