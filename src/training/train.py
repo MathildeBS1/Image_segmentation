@@ -17,13 +17,16 @@ import torch.optim as optim
 from time import time
 from src.datasets.PH2 import PH2
 from src.datasets.DRIVE import DRIVE
-from src.models.EncDecModel import EncDec
+from src.models.enc_dec import EncDec
 from src.models.losses import BCELoss
 #from lib.model.DilatedNetModel import DilatedNet
 #from lib.model.UNetModel import UNet, UNet2
 #from lib.losses import BCELoss, DiceLoss, FocalLoss, BCELoss_TotalVariation
 
 from src.models.losses import BCELoss
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 # Dataset
 size = 128
@@ -42,8 +45,8 @@ test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False,
 # IMPORTANT NOTE: There is no validation set provided here, but don't forget to
 # have one for the project
 
-print(f"Loaded {len(trainset)} training images")
-print(f"Loaded {len(testset)} test images")
+logger.info(f"Loaded {len(trainset)} training images")
+logger.info(f"Loaded {len(testset)} test images")
 
 # Training setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,7 +69,7 @@ X_test, Y_test = next(iter(test_loader))
 model.train()  # train mode
 for epoch in range(epochs):
     tic = time()
-    print(f'* Epoch {epoch+1}/{epochs}')
+    logger.info(f'* Epoch {epoch+1}/{epochs}')
 
     avg_loss = 0
     for X_batch, y_true in train_loader:
@@ -91,9 +94,9 @@ for epoch in range(epochs):
     # validation set after each epoch.
     #model.eval()  # testing mode
     #Y_hat = F.sigmoid(model(X_test.to(device))).detach().cpu()
-    print(f' - loss: {avg_loss}')
+    logger.info(f' - loss: {avg_loss}')
 
 # Save the model
 os.makedirs('saved_models', exist_ok=True)
 torch.save(model.state_dict(), 'saved_models/model.pth')
-print("Training has finished!")
+logger.info("Training has finished!")
