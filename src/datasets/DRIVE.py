@@ -128,12 +128,12 @@ if __name__ == "__main__":
     print(f"Test batches: {len(test_loader)}")
     
     dataset = train_loader.dataset.dataset
-    print(f"\nNormalization stats:")
+    print("\nNormalization stats:")
     print(f"Mean: {dataset.mean}")
     print(f"Std: {dataset.std}")
     
     image, vessel_mask, fov_mask, case_ids = next(iter(train_loader))
-    print(f"\nBatch shapes:")
+    print("\nBatch shapes:")
     print(f"Image: {image.shape}")
     print(f"Vessel mask: {vessel_mask.shape}")
     print(f"FOV mask: {fov_mask.shape}")
