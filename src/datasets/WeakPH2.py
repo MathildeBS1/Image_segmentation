@@ -9,7 +9,7 @@ class WeakPH2(torch.utils.data.Dataset):
     """
     Wrapper around a PH2 subset that returns click annotations instead of full masks.
     """
-    def __init__(self, base_dataset, n_positive=2, n_negative=2, rng_seed=None):
+    def __init__(self, base_dataset, n_positive=5, n_negative=5, rng_seed=None):
         super().__init__()
         self.base = base_dataset           
         self.n_pos = int(n_positive)
@@ -52,7 +52,7 @@ class WeakPH2(torch.utils.data.Dataset):
 
     @staticmethod
     def get_dataloaders(
-        n_positive=2, n_negative=2,
+        n_positive=5, n_negative=5,
         batch_size=4, num_workers=2, seed=67, rng_seed=None
     ):
         """
@@ -61,6 +61,7 @@ class WeakPH2(torch.utils.data.Dataset):
         2) Wrap each PH2 subset with WeakPH2
         3) Return new DataLoaders yielding clicks instead of masks
         """
+
         base_train_loader, base_val_loader, base_test_loader = PH2.get_dataloaders(
             batch_size=1, num_workers=num_workers, seed=seed
         )

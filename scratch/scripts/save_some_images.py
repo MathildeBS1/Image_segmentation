@@ -64,6 +64,19 @@ def visualize_samples(dataset_name, loader, num_samples=3, has_fov=False):
     print(f"Saved {output_path}")
     plt.close()
 
+def _get_mean_std_from_loader(loader):
+    """
+    Works for: Subset(PH2), PH2, and WeakPH2(base=Subset(PH2)).
+    """
+    ds = loader.dataset              # could be Subset, PH2, or WeakPH2
+    base = getattr(ds, "base", ds)   # WeakPH2 -> its .base, else itself
+    ph2 = getattr(base, "dataset", base)  # Subset -> .dataset (PH2), else itself
+    if hasattr(ph2, "mean") and hasattr(ph2, "std"):
+        return ph2.mean, ph2.std
+    raise RuntimeError("Could not locate mean/std on underlying PH2 dataset.")
+
+
+
 def visualize_click_samples(dataset_name, loader, num_samples=3):
     """
     Visualize samples from a WeakPH2 loader that yields:
@@ -102,9 +115,9 @@ def visualize_click_samples(dataset_name, loader, num_samples=3):
             pos = lbl == 1
             neg = ~pos
             # positives: circles
-            axes[idx].scatter(xs[pos], ys[pos], s=24, marker='o', edgecolors='white', facecolors='none', linewidths=1.5, label='pos')
+            axes[idx].scatter(xs[pos], ys[pos], s=24, marker='o', color='#0CDD08', linewidths=1.5, label='pos')
             # negatives: crosses
-            axes[idx].scatter(xs[neg], ys[neg], s=24, marker='x', linewidths=1.5, label='neg')
+            axes[idx].scatter(xs[neg], ys[neg], s=24, marker='o', color='red', linewidths=1.5, label='neg')
         axes[idx].set_title(f'{dataset_name} - {case_id}\nClick Annotations')
         axes[idx].axis('off')
 
