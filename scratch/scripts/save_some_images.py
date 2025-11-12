@@ -4,6 +4,7 @@ from pathlib import Path
 
 from src.datasets.DRIVE import DRIVE
 from src.datasets.PH2 import PH2
+from src.datasets.WeakPH2 import WeakPH2
 
 
 def denormalize(image, mean, std):
@@ -63,6 +64,56 @@ def visualize_samples(dataset_name, loader, num_samples=3, has_fov=False):
     print(f'Saved {output_path}')
     plt.close()
 
+def visualize_click_samples(dataset_name, loader, num_samples=3):
+    """
+    Visualize samples from a WeakPH2 loader that yields:
+      (image, clicks_coords[K,2], clicks_labels[K], case_id)
+    """
+    mean, std = _get_mean_std_from_loader(loader)
+
+    samples = []
+    for images, coords, labels, case_ids in loader:
+        # take items from the batch
+        b = images.shape[0]
+        for i in range(b):
+            samples.append((images[i], coords[i], labels[i], case_ids[i]))
+            if len(samples) >= num_samples:
+                break
+        if len(samples) >= num_samples:
+            break
+
+    fig, axes = plt.subplots(num_samples, 1, figsize=(6, 4 * num_samples))
+
+    if num_samples == 1:
+        axes = np.array([axes])
+
+    for idx, (image, coords, labels, case_id) in enumerate(samples):
+        image_denorm = denormalize(image, mean, std)
+        img = image_denorm.permute(1, 2, 0).cpu().numpy()
+        img = np.clip(img, 0, 1)
+
+        yx = coords.cpu().numpy()  # [K,2] (y,x)
+        lbl = labels.cpu().numpy() # [K]
+
+        axes[idx].imshow(img)
+        # Plot positives (label==1) and negatives (label==0)
+        if yx.size > 0:
+            ys, xs = yx[:, 0], yx[:, 1]
+            pos = lbl == 1
+            neg = ~pos
+            # positives: circles
+            axes[idx].scatter(xs[pos], ys[pos], s=24, marker='o', edgecolors='white', facecolors='none', linewidths=1.5, label='pos')
+            # negatives: crosses
+            axes[idx].scatter(xs[neg], ys[neg], s=24, marker='x', linewidths=1.5, label='neg')
+        axes[idx].set_title(f'{dataset_name} - {case_id}\nClick Annotations')
+        axes[idx].axis('off')
+
+    plt.tight_layout()
+    output_path = Path(f'{dataset_name.lower()}_click_samples.png')
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f'Saved {output_path}')
+    plt.close()
+
 
 if __name__ == "__main__":
     print("Loading DRIVE dataset...")
@@ -73,4 +124,8 @@ if __name__ == "__main__":
     ph2_train, _, _ = PH2.get_dataloaders(batch_size=4, num_workers=0)
     visualize_samples('PH2', ph2_train, num_samples=3, has_fov=False)
     
-    print("\nDone! Check drive_samples.png and ph2_samples.png in the project root.")
+    print("Loading WeakPH2 dataset...")
+    weak_ph2_train, _, _ = WeakPH2.get_dataloaders(batch_size=4, num_workers=0)
+    visualize_click_samples('WeakPH2', weak_ph2_train, num_samples=3)
+    
+    print("\nDone! Check drive_samples.png, ph2_samples.png and weak_ph2_samples.png in the project root.")
