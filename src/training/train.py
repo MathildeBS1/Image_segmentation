@@ -1,99 +1,115 @@
-import os
-import numpy as np
-import glob
-import PIL.Image as Image
+from src.training.evaluate import evaluate
+from src.training.helpers import save_checkpoint
+from src.utils.logger import get_logger
+from dataclasses import dataclass, field
+
+logger = get_logger(__name__)
 
 
-# pip install torchsummary
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision.datasets as datasets
-from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
-from torchvision import models
-from torchsummary import summary
-import torch.optim as optim
-from time import time
-from src.datasets.PH2 import PH2
-from src.datasets.DRIVE import DRIVE
-from src.models.EncDecModel import EncDec
-from src.models.losses import BCELoss
-#from lib.model.DilatedNetModel import DilatedNet
-#from lib.model.UNetModel import UNet, UNet2
-#from lib.losses import BCELoss, DiceLoss, FocalLoss, BCELoss_TotalVariation
+@dataclass
+class TrainingHistory:
+    """Training history across epochs."""
 
-from src.models.losses import BCELoss
+    train_loss: list[float] = field(default_factory=list)
+    val_loss: list[float] = field(default_factory=list)
+    val_dice: list[float] = field(default_factory=list)
+    val_iou: list[float] = field(default_factory=list)
+    val_accuracy: list[float] = field(default_factory=list)
+    val_sensitivity: list[float] = field(default_factory=list)
+    val_specificity: list[float] = field(default_factory=list)
 
-# Dataset
-size = 128
-train_transform = transforms.Compose([transforms.Resize((size, size)),
-                                    transforms.ToTensor()])
-test_transform = transforms.Compose([transforms.Resize((size, size)),
-                                    transforms.ToTensor()])
 
-batch_size = 6
-trainset = PH2(train=True, transform=train_transform)
-train_loader = DataLoader(trainset, batch_size=batch_size, shuffle=True,
-                          num_workers=3)
-testset = PH2(train=False, transform=test_transform)
-test_loader = DataLoader(testset, batch_size=batch_size, shuffle=False,
-                          num_workers=3)
-# IMPORTANT NOTE: There is no validation set provided here, but don't forget to
-# have one for the project
+def train_one_epoch(model, train_loader, criterion, optimizer, device):
+    """Train for one epoch."""
+    model.train()
+    total_loss = 0
 
-print(f"Loaded {len(trainset)} training images")
-print(f"Loaded {len(testset)} test images")
+    for batch in train_loader:
+        if len(batch) == 3:  # PH2
+            images, masks, _ = batch
+        else:  # DRIVE
+            images, masks, _, _ = batch
 
-# Training setup
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = EncDec().to(device)
-#model = UNet().to(device) # TODO
-#model = UNet2().to(device) # TODO
-#model = DilatedNet().to(device) # TODO
-#summary(model, (3, 256, 256))
-learning_rate = 0.001
-opt = optim.Adam(model.parameters(), learning_rate)
+        images = images.to(device)
+        masks = masks.to(device)
 
-loss_fn = BCELoss()
-#loss_fn = DiceLoss() # TODO
-#loss_fn = FocalLoss() # TODO
-#loss_fn = BCELoss_TotalVariation() # TODO
-epochs = 20
+        optimizer.zero_grad()
+        logits = model(images)
+        loss = criterion(logits, masks)
+        loss.backward()
+        optimizer.step()
 
-# Training loop
-X_test, Y_test = next(iter(test_loader))
-model.train()  # train mode
-for epoch in range(epochs):
-    tic = time()
-    print(f'* Epoch {epoch+1}/{epochs}')
+        total_loss += loss.item()
 
-    avg_loss = 0
-    for X_batch, y_true in train_loader:
-        X_batch = X_batch.to(device)
-        y_true = y_true.to(device)
+    return total_loss / len(train_loader)
 
-        # set parameter gradients to zero
-        opt.zero_grad()
 
-        # forward
-        y_pred = model(X_batch)
-        # IMPORTANT NOTE: Check whether y_pred is normalized or unnormalized
-        # and whether it makes sense to apply sigmoid or softmax.
-        loss = loss_fn(y_pred, y_true)  # forward-pass
-        loss.backward()  # backward-pass
-        opt.step()  # update weights
+def train_model(
+    model,
+    train_loader,
+    val_loader,
+    criterion,
+    optimizer,
+    num_epochs,
+    device,
+    checkpoint_dir,
+    early_stopping=None,
+    use_fov_mask=False,
+):
+    """Train model with validation and checkpointing."""
+    history = TrainingHistory()
+    best_val_dice = 0
 
-        # calculate metrics to show the user
-        avg_loss += loss / len(train_loader)
+    for epoch in range(1, num_epochs + 1):
+        logger.info(f"Epoch {epoch}/{num_epochs}")
 
-    # IMPORTANT NOTE: It is a good practice to check performance on a
-    # validation set after each epoch.
-    #model.eval()  # testing mode
-    #Y_hat = F.sigmoid(model(X_test.to(device))).detach().cpu()
-    print(f' - loss: {avg_loss}')
+        # Train
+        train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
+        logger.info(f"  Train Loss: {train_loss:.4f}")
 
-# Save the model
-os.makedirs('saved_models', exist_ok=True)
-torch.save(model.state_dict(), 'saved_models/model.pth')
-print("Training has finished!")
+        # Validate
+        val_metrics = evaluate(
+            model, val_loader, criterion, device, use_fov_mask=use_fov_mask
+        )
+
+        logger.info(f"  Val Loss: {val_metrics.loss:.4f}")
+        logger.info(f"  Val Dice: {val_metrics.dice:.4f}")
+
+        # Store history
+        history.train_loss.append(train_loss)
+        history.val_loss.append(val_metrics.loss)
+        history.val_dice.append(val_metrics.dice)
+        history.val_iou.append(val_metrics.iou)
+        history.val_accuracy.append(val_metrics.accuracy)
+        history.val_sensitivity.append(val_metrics.sensitivity)
+        history.val_specificity.append(val_metrics.specificity)
+
+        # Save best model
+        if val_metrics.dice > best_val_dice:
+            best_val_dice = val_metrics.dice
+            save_checkpoint(
+                model,
+                optimizer,
+                epoch,
+                val_metrics,
+                f"{checkpoint_dir}/best_model.pth",
+            )
+
+        # Save last model
+        save_checkpoint(
+            model,
+            optimizer,
+            epoch,
+            val_metrics,
+            f"{checkpoint_dir}/last_model.pth",
+            verbose=False,
+        )
+
+        # Early stopping
+        if early_stopping:
+            early_stopping(val_metrics.dice, epoch=epoch)
+            if early_stopping.stop:
+                logger.info(f"Early stopping at epoch {epoch}")
+                break
+
+    return history

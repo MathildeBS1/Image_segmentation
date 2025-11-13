@@ -217,4 +217,3 @@ class PointBCELoss(nn.Module):
         )
 
         return loss
-
