@@ -161,3 +161,59 @@ class WeightedBCELoss(nn.Module):
             f"(neg: {num_negative:,}, pos: {num_positive:,})"
         )
         return pos_weight
+
+class PointBCELoss(nn.Module):
+    """
+    BCE-with-logits loss computed only at sparse click locations.
+    """
+    def __init__(self):
+        super().__init__()
+        self.reduction = "mean"
+
+    def forward(self, pred_logits, clicks_coords, clicks_labels):
+        ## Takes predicted mask and click annotations as input
+        ## pred_logits: network output logits  [B, 1, H, W]
+        ## clicks_coords: click positions      [B, K, 2]
+        ## clicks_labels: click labels         [B, K]
+
+        # Basic shape checks
+        if pred_logits.dim() != 4 or pred_logits.size(1) != 1:
+            raise ValueError(f"pred_logits must be [B,1,H,W], got {pred_logits.shape}")
+
+        B, K, two = clicks_coords.shape
+        if two != 2:
+            raise ValueError(f"clicks_coords must be [B,K,2], got {clicks_coords.shape}")
+
+        device = pred_logits.device
+
+        # Move clicks to same device
+        clicks_coords = clicks_coords.to(device)
+        clicks_labels = clicks_labels.to(device)
+
+        ## Extract predicted values only at click locations
+
+        # Build batch index: [0,0,...,1,1,...,B-1,...]
+        batch_idx = torch.arange(B, device=device).unsqueeze(1).expand(B, K)  # [B,K]
+
+        ys = clicks_coords[..., 0].long()  # [B,K]
+        xs = clicks_coords[..., 1].long()  # [B,K]
+
+        # Advanced indexing: gather logits at the click locations
+        clicked_logits = pred_logits[batch_idx, 0, ys, xs]  # [B,K]
+        clicked_logits = clicked_logits.reshape(-1)         # [B*K]
+
+        # Flatten labels and convert to float
+        clicked_labels = clicks_labels.reshape(-1).float()  # [B*K]
+
+        # Edge case: if we have zero clicks for some reason
+        if clicked_labels.numel() == 0:
+            return pred_logits.new_tensor(0.0, requires_grad=True)
+
+        ## Compute BCE loss between predicted values and click labels
+        loss = F.binary_cross_entropy_with_logits(
+            clicked_logits,
+            clicked_labels,
+            reduction=self.reduction,
+        )
+
+        return loss
