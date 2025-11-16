@@ -1,3 +1,7 @@
+# Checkpoints
+checkpoints/
+checkpoints_backup_dice_only/
+outputs/
 
 # MacOS stuff
 .DS_Store

@@ -17,10 +17,14 @@ module load python3/3.13.9
 cd ~/projects/Image_segmentation
 uv sync
 
+# Print submitted parameters for debugging
+echo "DATASET=${DATASET:-PH2}"
+echo "LOSS=${LOSS:-dice}"
+
 # Run training
 uv run -m scripts.train_u_net \
-    --dataset ${DATASET:-PH2} \
-    --loss ${LOSS:-dice} \
+    --dataset "${DATASET:-PH2}" \
+    --loss "${LOSS:-dice}" \
     --epochs ${EPOCHS:-50} \
     --batch_size ${BATCH_SIZE:-4} \
     --lr ${LR:-1e-4} \

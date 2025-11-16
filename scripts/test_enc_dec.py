@@ -4,6 +4,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import argparse
 import torch
+import os
 from src.training.evaluate import evaluate
 from src.metrics.segmentation import SegmentationMetrics
 from src.utils.logger import get_logger
@@ -13,25 +14,36 @@ logger = get_logger(__name__)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test trained model")
+    parser = argparse.ArgumentParser(description="Test trained Encoder-Decoder model on all splits")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to checkpoint")
     parser.add_argument("--dataset", type=str, required=True, choices=["PH2", "DRIVE"])
     parser.add_argument("--loss", type=str, required=True, choices=["bce", "dice", "focal", "weighted_bce"])
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--device", type=str, default="cuda:0", help="Device (cuda:0, cuda:1, or cpu)")
+    parser.add_argument("--gpu_id", type=int, default=0, help="GPU ID to use (default: 0)")
     
     args = parser.parse_args()
     args.model = "encdec"
     
-    # Setup
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
+    # Set GPU device
+    if torch.cuda.is_available():
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
+        device = torch.device("cuda:0")
+        torch.cuda.empty_cache()
+    else:
+        device = torch.device("cpu")
+    
+    logger.info(f"Using device: cuda (GPU {args.gpu_id})")
+    logger.info(f"Model: Encoder-Decoder")
     logger.info(f"Dataset: {args.dataset}")
     logger.info(f"Checkpoint: {args.checkpoint}")
+    logger.info(f"Batch size: {args.batch_size}")
     
-    # Load data (only need test loader)
-    _, _, test_loader = create_dataloaders(args.dataset, args.batch_size, args.num_workers)
+    # Load all three dataloaders
+    train_loader, val_loader, test_loader = create_dataloaders(
+        args.dataset, args.batch_size, args.num_workers
+    )
     
     # Create model and load checkpoint
     model = create_model(args.model, device)
@@ -40,39 +52,81 @@ def main():
     logger.info(f"Loaded checkpoint from epoch: {checkpoint.get('epoch', 'unknown')}")
     
     # Create loss function
-    criterion = create_loss(args.loss, test_loader, device)
+    criterion = create_loss(args.loss, train_loader, device)
     
-    # Evaluate on test set
-    logger.info("\n" + "=" * 80)
-    logger.info("EVALUATING ON TEST SET")
-    logger.info("=" * 80)
-    
+    # Determine if FOV mask should be used
     use_fov_mask = args.dataset == "DRIVE"
-    test_metrics = evaluate(
-        model=model,
-        dataloader=test_loader,
-        criterion=criterion,
-        device=device,
-        use_fov_mask=use_fov_mask
-    )
     
-    # Print segmentation metrics only
-    metrics_dict = {
-        'dice': test_metrics.dice,
-        'iou': test_metrics.iou,
-        'accuracy': test_metrics.accuracy,
-        'sensitivity': test_metrics.sensitivity,
-        'specificity': test_metrics.specificity,
+    # Define all splits to evaluate
+    splits = [
+        ("TRAIN", train_loader),
+        ("VALIDATION", val_loader),
+        ("TEST", test_loader)
+    ]
+    
+    all_results = {}
+    
+    # Evaluate on each split
+    for split_name, dataloader in splits:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        logger.info("\n" + "=" * 80)
+        logger.info(f"EVALUATING ON {split_name} SET")
+        logger.info("=" * 80)
+        
+        metrics = evaluate(
+            model=model,
+            dataloader=dataloader,
+            criterion=criterion,
+            device=device,
+            use_fov_mask=use_fov_mask
+        )
+        
+        metrics_dict = {
+            'dice': metrics.dice,
+            'iou': metrics.iou,
+            'accuracy': metrics.accuracy,
+            'sensitivity': metrics.sensitivity,
+            'specificity': metrics.specificity,
+        }
+        all_results[split_name] = metrics_dict
+        
+        SegmentationMetrics.print_metrics(metrics_dict, stage=f"{split_name.title()} Set")
+        
+        logger.info(f"{split_name} Dice:        {metrics.dice:.4f}")
+        logger.info(f"{split_name} IoU:         {metrics.iou:.4f}")
+        logger.info(f"{split_name} Accuracy:    {metrics.accuracy:.4f}")
+        logger.info(f"{split_name} Sensitivity: {metrics.sensitivity:.4f}")
+        logger.info(f"{split_name} Specificity: {metrics.specificity:.4f}")
+    
+    # Print comprehensive summary table
+    logger.info("\n" + "=" * 80)
+    logger.info("SUMMARY: ALL FIVE PERFORMANCE MEASURES ON ALL THREE SPLITS")
+    logger.info("=" * 80)
+    logger.info(f"{'Metric':<15} {'Train':<12} {'Validation':<12} {'Test':<12}")
+    logger.info("-" * 80)
+    
+    metric_names = ['dice', 'iou', 'accuracy', 'sensitivity', 'specificity']
+    metric_display = {
+        'dice': 'Dice',
+        'iou': 'IoU',
+        'accuracy': 'Accuracy',
+        'sensitivity': 'Sensitivity',
+        'specificity': 'Specificity'
     }
     
-    SegmentationMetrics.print_metrics(metrics_dict, stage="Test Set")
+    for metric in metric_names:
+        logger.info(
+            f"{metric_display[metric]:<15} "
+            f"{all_results['TRAIN'][metric]:<12.4f} "
+            f"{all_results['VALIDATION'][metric]:<12.4f} "
+            f"{all_results['TEST'][metric]:<12.4f}"
+        )
     
-    # Also log them
-    logger.info(f"Test Dice:        {test_metrics.dice:.4f}")
-    logger.info(f"Test IoU:         {test_metrics.iou:.4f}")
-    logger.info(f"Test Accuracy:    {test_metrics.accuracy:.4f}")
-    logger.info(f"Test Sensitivity: {test_metrics.sensitivity:.4f}")
-    logger.info(f"Test Specificity: {test_metrics.specificity:.4f}")
+    logger.info("=" * 80)
+    
+    return all_results
 
 
 if __name__ == "__main__":
